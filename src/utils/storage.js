@@ -4,7 +4,10 @@ const STORAGE_KEYS = {
   QUIT_PLAN: 'qswf_quit_plan',
   LOGS: 'qswf_logs',
   ACHIEVEMENTS: 'qswf_achievements',
-  ONBOARDING: 'qswf_onboarding_complete'
+  ONBOARDING: 'qswf_onboarding_complete',
+  CRAVING_RESPONSES: 'qswf_craving_responses',
+  DASHBOARD_ORDER: 'qswf_dashboard_order',
+  DASHBOARD_VISIBILITY: 'qswf_dashboard_visibility'
 }
 
 export const storage = {
@@ -57,6 +60,33 @@ export const storage = {
   isOnboardingComplete: () => {
     const complete = localStorage.getItem(STORAGE_KEYS.ONBOARDING)
     return complete ? JSON.parse(complete) : false
+  },
+  
+  saveCravingResponses: (responses) => {
+    localStorage.setItem(STORAGE_KEYS.CRAVING_RESPONSES, JSON.stringify(responses))
+  },
+  
+  getCravingResponses: () => {
+    const responses = localStorage.getItem(STORAGE_KEYS.CRAVING_RESPONSES)
+    return responses ? JSON.parse(responses) : {}
+  },
+  
+  saveDashboardOrder: (order) => {
+    localStorage.setItem(STORAGE_KEYS.DASHBOARD_ORDER, JSON.stringify(order))
+  },
+  
+  getDashboardOrder: () => {
+    const order = localStorage.getItem(STORAGE_KEYS.DASHBOARD_ORDER)
+    return order ? JSON.parse(order) : null
+  },
+  
+  saveDashboardVisibility: (visibility) => {
+    localStorage.setItem(STORAGE_KEYS.DASHBOARD_VISIBILITY, JSON.stringify(visibility))
+  },
+  
+  getDashboardVisibility: () => {
+    const visibility = localStorage.getItem(STORAGE_KEYS.DASHBOARD_VISIBILITY)
+    return visibility ? JSON.parse(visibility) : null
   },
   
   clearAll: () => {

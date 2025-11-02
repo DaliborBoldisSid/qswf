@@ -5,13 +5,14 @@ import { format, subDays, startOfWeek, endOfWeek } from 'date-fns'
 
 const Stats = ({ userData, quitPlan, logs, achievements, onBack }) => {
   const stats = calculateStats(logs, quitPlan, userData)
+  const currencySymbol = userData?.currency === 'EUR' ? '€' : '$'
 
   // Prepare weekly data for chart
   const weeklyData = []
-  const weeks = Math.min(12, stats.weeksSinceStart + 1)
+  const weeks = Math.min(12, Math.max(1, stats.weeksSinceStart + 1))
   
   for (let i = 0; i < weeks; i++) {
-    const weekStart = new Date(quitPlan.startDate)
+    const weekStart = new Date(quitPlan?.startDate || Date.now())
     weekStart.setDate(weekStart.getDate() + (i * 7))
     const weekEnd = new Date(weekStart)
     weekEnd.setDate(weekEnd.getDate() + 6)
@@ -21,14 +22,14 @@ const Stats = ({ userData, quitPlan, logs, achievements, onBack }) => {
       return logDate >= weekStart && logDate <= weekEnd
     })
     
-    const weekPlan = quitPlan.weeks[i] || { cigarettesAllowed: 0, vapesAllowed: 0 }
+    const weekPlan = quitPlan?.weeks?.[i] || { cigarettesAllowed: 0, vapesAllowed: 0 }
     
     weeklyData.push({
       week: `W${i + 1}`,
-      actual: weekLogs.length,
-      target: weekPlan.cigarettesAllowed + weekPlan.vapesAllowed,
-      cigarettes: weekLogs.filter(l => l.type === 'cigarette').length,
-      vapes: weekLogs.filter(l => l.type === 'vape').length
+      actual: weekLogs.length || 0,
+      target: (weekPlan.cigarettesAllowed || 0) + (weekPlan.vapesAllowed || 0),
+      cigarettes: weekLogs.filter(l => l.type === 'cigarette').length || 0,
+      vapes: weekLogs.filter(l => l.type === 'vape').length || 0
     })
   }
 
@@ -91,7 +92,7 @@ const Stats = ({ userData, quitPlan, logs, achievements, onBack }) => {
               <DollarSign className="w-5 h-5 text-yellow-600" />
               <span className="text-sm font-semibold text-yellow-800">Saved</span>
             </div>
-            <p className="text-3xl font-bold text-yellow-900">${stats.moneySaved}</p>
+            <p className="text-3xl font-bold text-yellow-900">{currencySymbol}{stats.moneySaved}</p>
           </div>
 
           <div className="card bg-gradient-to-br from-blue-50 to-cyan-100">

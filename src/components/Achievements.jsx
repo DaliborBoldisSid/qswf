@@ -1,8 +1,14 @@
 import { ArrowLeft, Trophy, Lock } from 'lucide-react'
 import { ACHIEVEMENTS } from '../utils/achievements'
 
-const Achievements = ({ unlockedAchievements, onBack }) => {
+const Achievements = ({ unlockedAchievements, userData, onBack }) => {
   const unlockedIds = unlockedAchievements.map(a => a.id)
+  const currencySymbol = userData?.currency === 'EUR' ? '€' : '$'
+  
+  // Replace $ with user's currency in achievement descriptions
+  const formatDescription = (description) => {
+    return description.replace(/\$/g, currencySymbol)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-500 via-blue-500 to-purple-600 pb-20">
@@ -75,7 +81,7 @@ const Achievements = ({ unlockedAchievements, onBack }) => {
                     {achievement.title}
                   </h3>
                   <p className={`text-sm ${isUnlocked ? 'text-gray-600' : 'text-gray-400'}`}>
-                    {achievement.description}
+                    {formatDescription(achievement.description)}
                   </p>
                   {isUnlocked && unlockedData && (
                     <p className="text-xs text-yellow-700 mt-2">

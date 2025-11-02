@@ -3,11 +3,13 @@ import Onboarding from './components/Onboarding'
 import Dashboard from './components/Dashboard'
 import Achievements from './components/Achievements'
 import Stats from './components/Stats'
+import CravingHelp from './components/CravingHelp'
 import { storage } from './utils/storage'
 import { generateQuitPlan, getCurrentWeekPlan, getTimeUntilNext } from './utils/quittingLogic'
 import { requestNotificationPermission, showNotification, scheduleNotification } from './utils/notifications'
 import { checkAchievements, calculateStats } from './utils/achievements'
-import { Home, TrendingUp, Trophy } from 'lucide-react'
+import { recalculateAdaptivePlan, shouldRecalculatePlan } from './utils/adaptivePlan'
+import { Home, TrendingUp, Trophy, Heart } from 'lucide-react'
 
 function App() {
   const [currentView, setCurrentView] = useState('loading')
@@ -28,9 +30,16 @@ function App() {
         const savedAchievements = storage.getAchievements()
         
         setUserData(savedUserData)
-        setQuitPlan(savedQuitPlan)
         setLogs(savedLogs)
         setAchievements(savedAchievements)
+        
+        // Recalculate adaptive plan if needed
+        let activePlan = savedQuitPlan
+        if (savedQuitPlan && shouldRecalculatePlan(savedQuitPlan)) {
+          activePlan = recalculateAdaptivePlan(savedLogs, savedQuitPlan, savedUserData)
+          storage.saveQuitPlan(activePlan)
+        }
+        setQuitPlan(activePlan)
         setCurrentView('dashboard')
 
         // Check for new achievements
@@ -92,6 +101,14 @@ function App() {
     const updatedLogs = [...logs, newLog]
     setLogs(updatedLogs)
     storage.saveLogs(updatedLogs)
+    
+    // Recalculate adaptive plan if needed
+    let updatedPlan = quitPlan
+    if (quitPlan && shouldRecalculatePlan(quitPlan)) {
+      updatedPlan = recalculateAdaptivePlan(updatedLogs, quitPlan, userData)
+      setQuitPlan(updatedPlan)
+      storage.saveQuitPlan(updatedPlan)
+    }
 
     // Check for achievements
     const stats = calculateStats(updatedLogs, quitPlan, userData)
@@ -114,9 +131,9 @@ function App() {
     }
 
     // Schedule next notification
-    const currentWeekPlan = getCurrentWeekPlan(quitPlan)
+    const currentWeekPlan = getCurrentWeekPlan(updatedPlan)
     const lastLog = newLog
-    const waitTime = getTimeUntilNext(type, lastLog, currentWeekPlan)
+    const waitTime = getTimeUntilNext(type, lastLog, currentWeekPlan, updatedPlan, updatedLogs)
     
     if (waitTime > 0 && waitTime !== Infinity) {
       scheduleNotification(type, waitTime)
@@ -167,6 +184,7 @@ function App() {
       {currentView === 'achievements' && (
         <Achievements
           unlockedAchievements={achievements}
+          userData={userData}
           onBack={handleBack}
         />
       )}
@@ -177,6 +195,12 @@ function App() {
           quitPlan={quitPlan}
           logs={logs}
           achievements={achievements}
+          onBack={handleBack}
+        />
+      )}
+
+      {currentView === 'craving' && (
+        <CravingHelp
           onBack={handleBack}
         />
       )}
@@ -220,6 +244,18 @@ function App() {
               >
                 <Trophy className="w-6 h-6" />
                 <span className="text-xs font-semibold">Achievements</span>
+              </button>
+
+              <button
+                onClick={() => handleNavigate('craving')}
+                className={`flex flex-col items-center gap-1 py-2 px-4 rounded-lg transition-all ${
+                  currentView === 'craving'
+                    ? 'text-primary-600 bg-primary-50'
+                    : 'text-gray-600'
+                }`}
+              >
+                <Heart className="w-6 h-6" />
+                <span className="text-xs font-semibold">Help</span>
               </button>
             </div>
           </div>

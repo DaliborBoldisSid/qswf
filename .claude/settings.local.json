@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash($env:PATH += \";C:\\Users\\boldi\\.npm-global\")",
+      "Bash(claude --version:*)",
+      "Bash(\"C:\\Users\\boldi\\.npm-global\\claude.cmd\" --version)",
+      "Bash(powershell.exe -Command \"[Environment]::SetEnvironmentVariable(''Path'', [Environment]::GetEnvironmentVariable(''Path'', ''User'') + '';C:\\Users\\boldi\\.npm-global'', ''User'')\")",
+      "Bash(powershell.exe -Command \"[Environment]::GetEnvironmentVariable(''''Path'''', ''''User'''')\")",
+      "Bash(powershell.exe -Command \"claude --version\")",
+      "Bash(powershell.exe -Command \"[Environment]::GetEnvironmentVariable(''Path'', ''User'')\")",
+      "Bash(\"C:\\Users\\boldi\\.npm-global\\claude.cmd\" --help)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

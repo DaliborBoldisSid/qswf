@@ -1,11 +1,19 @@
 // Achievement system
+import { getCurrentWeekPlan } from './quittingLogic.js'
 
 export const ACHIEVEMENTS = [
   {
-    id: 'first_day',
-    title: 'First Day',
-    description: 'Complete your first day',
+    id: 'first_log',
+    title: 'First Step',
+    description: 'Logged your first session',
     icon: '🌟',
+    condition: (stats) => stats.totalLogged >= 1
+  },
+  {
+    id: 'first_day',
+    title: 'Day One Complete',
+    description: 'Complete your first day',
+    icon: '✅',
     condition: (stats) => stats.daysActive >= 1
   },
   {
@@ -34,42 +42,42 @@ export const ACHIEVEMENTS = [
     title: 'Reducer',
     description: 'Reduce consumption by 10%',
     icon: '📉',
-    condition: (stats) => stats.reductionPercentage >= 10
+    condition: (stats) => stats.reductionPercentage >= 10 && stats.weeksSinceStart >= 1
   },
   {
     id: 'reducer_25',
     title: 'Quarter Master',
     description: 'Reduce consumption by 25%',
     icon: '🎯',
-    condition: (stats) => stats.reductionPercentage >= 25
+    condition: (stats) => stats.reductionPercentage >= 25 && stats.weeksSinceStart >= 2
   },
   {
     id: 'reducer_50',
     title: 'Half Way Hero',
     description: 'Reduce consumption by 50%',
     icon: '⭐',
-    condition: (stats) => stats.reductionPercentage >= 50
+    condition: (stats) => stats.reductionPercentage >= 50 && stats.weeksSinceStart >= 4
   },
   {
     id: 'reducer_75',
     title: 'Almost There',
     description: 'Reduce consumption by 75%',
     icon: '💎',
-    condition: (stats) => stats.reductionPercentage >= 75
+    condition: (stats) => stats.reductionPercentage >= 75 && stats.weeksSinceStart >= 6
   },
   {
-    id: 'perfect_day',
-    title: 'Perfect Day',
-    description: 'Stay within limits for a full day',
+    id: 'consistency_3',
+    title: 'Building Habits',
+    description: 'Log sessions for 3 days',
     icon: '✨',
-    condition: (stats) => stats.perfectDays >= 1
+    condition: (stats) => stats.daysActive >= 3
   },
   {
-    id: 'perfect_week',
-    title: 'Perfect Week',
-    description: 'Stay within limits for 7 days straight',
+    id: 'consistency_7',
+    title: 'One Week Warrior',
+    description: 'Log sessions for 7 days',
     icon: '🌈',
-    condition: (stats) => stats.perfectDays >= 7
+    condition: (stats) => stats.daysActive >= 7
   },
   {
     id: 'money_saver_50',
@@ -137,38 +145,72 @@ export const calculateStats = (logs, quitPlan, userData) => {
     return {
       daysActive: 0,
       totalLogged: 0,
+      cigarettesLogged: 0,
+      vapesLogged: 0,
       reductionPercentage: 0,
       moneySaved: 0,
       currentStreak: 0,
-      perfectDays: 0
+      perfectDays: 0,
+      weeksSinceStart: 0
     }
   }
   
   const startDate = new Date(quitPlan.startDate).getTime()
   const now = Date.now()
-  const daysSinceStart = Math.floor((now - startDate) / (24 * 60 * 60 * 1000))
+  const daysSinceStart = Math.max(0, Math.floor((now - startDate) / (24 * 60 * 60 * 1000)))
   
   const totalLogged = logs.length
   const cigarettesLogged = logs.filter(l => l.type === 'cigarette').length
   const vapesLogged = logs.filter(l => l.type === 'vape').length
   
-  // Calculate average per week based on logs
-  const weeksSinceStart = Math.max(1, daysSinceStart / 7)
-  const currentCigsPerWeek = (cigarettesLogged / weeksSinceStart)
-  const currentVapesPerWeek = (vapesLogged / weeksSinceStart)
+  // Calculate actual weeks passed (no forced minimum for achievement checks)
+  const weeksSinceStart = daysSinceStart / 7
+  const actualWeeksSinceStart = daysSinceStart / 7 // Actual time for money calculations
   
-  const originalTotal = quitPlan.originalCigarettesPerWeek + quitPlan.originalVapesPerWeek
+  // Get current week's plan to compare against
+  const currentWeek = getCurrentWeekPlan(quitPlan)
+  const expectedCigsThisWeek = currentWeek?.cigarettesAllowed || quitPlan.originalCigarettesPerWeek
+  const expectedVapesThisWeek = currentWeek?.vapesAllowed || quitPlan.originalVapesPerWeek
+  const expectedTotal = expectedCigsThisWeek + expectedVapesThisWeek
+  
+  // Calculate actual consumption rate per week
+  const weeksForAverage = Math.max(1, weeksSinceStart) // Use minimum 1 for division
+  const currentCigsPerWeek = cigarettesLogged / weeksForAverage
+  const currentVapesPerWeek = vapesLogged / weeksForAverage
   const currentTotal = currentCigsPerWeek + currentVapesPerWeek
   
-  const reductionPercentage = Math.min(100, Math.max(0, 
-    ((originalTotal - currentTotal) / originalTotal) * 100
-  ))
+  // Calculate reduction percentage compared to ORIGINAL baseline
+  // Only meaningful after at least 1 complete week
+  const originalTotal = quitPlan.originalCigarettesPerWeek + quitPlan.originalVapesPerWeek
+  let reductionPercentage = 0
   
-  // Calculate money saved (assuming $8 per pack of 20 cigs, $15 per vape)
-  const cigsSaved = Math.max(0, (quitPlan.originalCigarettesPerWeek * weeksSinceStart) - cigarettesLogged)
-  const vapesSaved = Math.max(0, (quitPlan.originalVapesPerWeek * weeksSinceStart) - vapesLogged)
+  if (weeksSinceStart >= 1 && originalTotal > 0) {
+    // Compare actual average consumption to original baseline
+    reductionPercentage = Math.min(100, Math.max(0, ((originalTotal - currentTotal) / originalTotal) * 100))
+  }
   
-  const moneySaved = (cigsSaved * 0.4) + (vapesSaved * 15) // $0.4 per cig, $15 per vape pod
+  // Calculate money saved: Compare actual consumption to what you WOULD have consumed at original rate
+  // This shows real week-to-week savings
+  
+  let moneySaved = 0
+  
+  // Only calculate savings if user has been active for at least 1 day
+  if (daysSinceStart >= 1 && totalLogged > 0) {
+    // What you WOULD have consumed at original rate during this ACTUAL time
+    const expectedCigs = quitPlan.originalCigarettesPerWeek * actualWeeksSinceStart
+    const expectedVapes = quitPlan.originalVapesPerWeek * actualWeeksSinceStart
+    
+    // What you actually consumed
+    // Savings = expected - actual
+    const cigsSaved = Math.max(0, expectedCigs - cigarettesLogged)
+    const vapesSaved = Math.max(0, expectedVapes - vapesLogged)
+    
+    // Use actual prices from userData
+    const cigPrice = userData?.cigarettePrice ? (userData.cigarettePrice / 20) : 0.4 // price per cigarette
+    const vapePrice = userData?.vapePrice || 15 // price per vape/pod
+    
+    moneySaved = (cigsSaved * cigPrice) + (vapesSaved * vapePrice)
+  }
   
   // Calculate streak
   let currentStreak = 0
@@ -198,14 +240,14 @@ export const calculateStats = (logs, quitPlan, userData) => {
   // This would require more complex logic to track daily limits vs actuals
   
   return {
-    daysActive: daysSinceStart,
-    totalLogged,
-    cigarettesLogged,
-    vapesLogged,
-    reductionPercentage: Math.round(reductionPercentage),
-    moneySaved: Math.round(moneySaved * 100) / 100,
-    currentStreak,
-    perfectDays,
-    weeksSinceStart: Math.floor(weeksSinceStart)
+    daysActive: Math.max(0, daysSinceStart),
+    totalLogged: totalLogged || 0,
+    cigarettesLogged: cigarettesLogged || 0,
+    vapesLogged: vapesLogged || 0,
+    reductionPercentage: Math.round(reductionPercentage) || 0,
+    moneySaved: Math.max(0, Math.round(moneySaved * 100) / 100),
+    currentStreak: currentStreak || 0,
+    perfectDays: perfectDays || 0,
+    weeksSinceStart: Math.max(0, Math.floor(weeksSinceStart))
   }
 }

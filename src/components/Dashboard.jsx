@@ -1,14 +1,30 @@
 import { useState, useEffect } from 'react'
-import { Cigarette, Wind, Clock, CheckCircle, Trophy, TrendingDown, Calendar, Bell } from 'lucide-react'
+import { Cigarette, Wind, Clock, CheckCircle, Trophy, TrendingDown, Calendar, Bell, Bug, Settings, GripVertical, ChevronUp, ChevronDown, Eye, EyeOff } from 'lucide-react'
 import { getCurrentWeekPlan, canSmokeNow, getTimeUntilNext } from '../utils/quittingLogic'
-import { getDailyQuote } from '../utils/quotes'
 import { requestNotificationPermission, showNotification, getNotificationPermission } from '../utils/notifications'
+import { storage } from '../utils/storage'
+import { enforceMinimumWait, calculateDelayReward } from '../utils/adaptivePlan'
+import NotificationDebug from './NotificationDebug'
 
 const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
   const [currentTime, setCurrentTime] = useState(Date.now())
   const [selectedType, setSelectedType] = useState(null)
   const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission())
   const [showInstructions, setShowInstructions] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showSmokeFreeConfirmation, setShowSmokeFreeConfirmation] = useState(false)
+  const [componentOrder, setComponentOrder] = useState(() => {
+    return storage.getDashboardOrder() || ['vape', 'cigarette', 'weekSummary', 'notifications']
+  })
+  const [componentVisibility, setComponentVisibility] = useState(() => {
+    return storage.getDashboardVisibility() || {
+      vape: true,
+      cigarette: true,
+      weekSummary: true,
+      notifications: true
+    }
+  })
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -22,11 +38,11 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
   const lastCigLog = [...logs].filter(l => l.type === 'cigarette').sort((a, b) => b.timestamp - a.timestamp)[0]
   const lastVapeLog = [...logs].filter(l => l.type === 'vape').sort((a, b) => b.timestamp - a.timestamp)[0]
   
-  const canSmokeCig = canSmokeNow('cigarette', lastCigLog, currentWeekPlan)
-  const canSmokeVape = canSmokeNow('vape', lastVapeLog, currentWeekPlan)
+  const canSmokeCig = canSmokeNow('cigarette', lastCigLog, currentWeekPlan, quitPlan, logs)
+  const canSmokeVape = canSmokeNow('vape', lastVapeLog, currentWeekPlan, quitPlan, logs)
   
-  const timeUntilCig = getTimeUntilNext('cigarette', lastCigLog, currentWeekPlan)
-  const timeUntilVape = getTimeUntilNext('vape', lastVapeLog, currentWeekPlan)
+  const timeUntilCig = getTimeUntilNext('cigarette', lastCigLog, currentWeekPlan, quitPlan, logs)
+  const timeUntilVape = getTimeUntilNext('vape', lastVapeLog, currentWeekPlan, quitPlan, logs)
 
   const formatTime = (ms) => {
     if (ms === Infinity) return 'No more this week'
@@ -43,22 +59,46 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
     return `${seconds}s`
   }
 
-  const handleLog = (type) => {
-    setSelectedType(type)
+  // Check for adaptive mode messaging
+  const getAdaptiveMessage = (type) => {
+    if (!quitPlan?.adaptiveMode) return null
+    
+    const reward = calculateDelayReward(logs, quitPlan)
+    if (reward.hasReward) {
+      return { type: 'reward', text: reward.message }
+    }
+    
+    const timeUntil = type === 'cigarette' ? timeUntilCig : timeUntilVape
+    if (timeUntil > 0 && timeUntil < Infinity) {
+      const enforcement = enforceMinimumWait(timeUntil)
+      if (enforcement.isMinimumEnforced) {
+        return { type: 'enforcement', text: enforcement.message }
+      }
+    }
+    
+    return null
+  }
+
+  const handleLog = (type, isExtraordinary = false) => {
+    setSelectedType({ type, isExtraordinary })
   }
 
   const confirmLog = () => {
     if (selectedType) {
-      onLogSmoke(selectedType)
+      onLogSmoke(selectedType.type)
       setSelectedType(null)
     }
   }
 
-  const todaysLogsCount = logs.filter(log => {
+  const todaysLogs = logs.filter(log => {
     const logDate = new Date(log.timestamp)
     const today = new Date()
     return logDate.toDateString() === today.toDateString()
-  }).length
+  })
+  
+  const todaysLogsCount = todaysLogs.length
+  const todaysCigs = todaysLogs.filter(l => l.type === 'cigarette').length
+  const todaysVapes = todaysLogs.filter(l => l.type === 'vape').length
 
   const weekStartDate = new Date(currentWeekPlan?.weekStart)
   const weekNumber = currentWeekPlan?.weekNumber || 0
@@ -113,31 +153,281 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
     <div className="min-h-screen bg-gradient-to-br from-primary-500 via-blue-500 to-purple-600 pb-20">
       {/* Header */}
       <div className="bg-white/10 backdrop-blur-lg p-4 text-white">
-        <div className="max-w-md mx-auto">
+        <div className="max-w-md mx-auto space-y-3">
+          {userData?.name && (
+            <div>
+              <p className="text-sm text-white/70">Welcome back</p>
+              <h1 className="text-3xl font-extrabold tracking-tight">{userData.name}</h1>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Week {weekNumber + 1}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">Week {weekNumber + 1}</h1>
+                {quitPlan?.adaptiveMode && (
+                  <span className="px-2 py-1 bg-purple-500/80 text-xs font-semibold rounded-full">
+                    🧠 ADAPTIVE
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-white/80">
                 {weekStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </p>
+              {quitPlan?.adaptiveMode && quitPlan?.adaptiveStats && (
+                <p className="text-xs text-white/70 mt-1">
+                  {quitPlan.adaptiveStats.trend === 'decreasing' && '📉 Doing great!'}
+                  {quitPlan.adaptiveStats.trend === 'stable' && '➡️ Staying steady'}
+                  {quitPlan.adaptiveStats.trend === 'increasing' && '📈 Stay focused'}
+                  {quitPlan.adaptiveStats.deviationPercent !== undefined && 
+                    ` ${Math.abs(quitPlan.adaptiveStats.deviationPercent)}% ${quitPlan.adaptiveStats.deviationPercent < 0 ? 'below' : 'above'} target`
+                  }
+                </p>
+              )}
             </div>
-            <button
-              onClick={() => onNavigate('achievements')}
-              className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-all"
-            >
-              <Trophy className="w-6 h-6" />
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowSettings(true)}
+                className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-all"
+                title="Customize Dashboard"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowDebug(true)}
+                className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-all"
+              >
+                <Bug className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => onNavigate('achievements')}
+                className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-all"
+              >
+                <Trophy className="w-6 h-6" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-md mx-auto p-4 space-y-4">
-        {/* Daily Quote */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 text-white">
-          <p className="text-center italic">{getDailyQuote()}</p>
-        </div>
+        {/* Smoke-Free Celebration Card */}
+        {currentWeekPlan && currentWeekPlan.totalAllowed === 0 && (
+          <div className="card bg-gradient-to-br from-green-400 via-emerald-400 to-teal-500 border-4 border-white shadow-2xl animate-pulse">
+            <div className="text-center text-white">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-3xl font-bold mb-2">You're Smoke-Free!</h2>
+              <p className="text-lg mb-4 text-white/90">
+                Congratulations! You've completed your quit plan.
+              </p>
+              <button
+                onClick={() => setShowSmokeFreeConfirmation(true)}
+                className="w-full py-4 bg-white text-green-600 rounded-xl font-bold text-lg hover:bg-green-50 transition-all active:scale-95 shadow-lg"
+              >
+                🏆 Confirm I'm Smoke-Free!
+              </button>
+            </div>
+          </div>
+        )}
 
-        {/* Notification Test Button */}
+        {/* Render components in custom order */}
+        {componentOrder.map((componentId) => {
+          if (!componentVisibility[componentId]) return null
+          
+          if (componentId === 'vape' && currentWeekPlan && currentWeekPlan.vapesAllowed > 0) {
+            return (
+              <div key="vape" className={`card border-2 ${canSmokeVape ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Wind className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-800">Vape Session</h3>
+                      <p className="text-sm text-gray-600">
+                        {currentWeekPlan.vapesAllowed} allowed this week
+                      </p>
+                    </div>
+                  </div>
+                  {canSmokeVape && (
+                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-white" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Today's Activity */}
+                <div className="bg-blue-50 p-3 rounded-lg mb-3">
+                  <p className="text-xs font-semibold text-blue-800 mb-1">Today's Activity</p>
+                  <p className="text-lg font-bold text-blue-600">{todaysVapes} logged today</p>
+                </div>
+
+                {!canSmokeVape && (
+                  <>
+                    <div className="bg-blue-100 p-3 rounded-lg mb-3 flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-blue-600" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-blue-800">Next available in:</p>
+                        <p className="text-lg font-bold text-blue-600">{formatTime(timeUntilVape)}</p>
+                      </div>
+                    </div>
+                    {(() => {
+                      const adaptiveMsg = getAdaptiveMessage('vape')
+                      if (adaptiveMsg) {
+                        return (
+                          <div className={`p-2 rounded-lg mb-3 text-xs ${
+                            adaptiveMsg.type === 'reward' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {adaptiveMsg.text}
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
+                  </>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleLog('vape', false)}
+                    disabled={!canSmokeVape}
+                    className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
+                      canSmokeVape
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white active:scale-95'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {canSmokeVape ? 'Log Vape Session' : 'Not Available Yet'}
+                  </button>
+                  {!canSmokeVape && (
+                    <button
+                      onClick={() => handleLog('vape', true)}
+                      className="px-4 py-3 rounded-lg font-semibold transition-all bg-red-500 hover:bg-red-600 text-white active:scale-95"
+                      title="Log an extraordinary session outside of schedule"
+                    >
+                      ⚠️
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          }
+          
+          if (componentId === 'cigarette' && currentWeekPlan && currentWeekPlan.cigarettesAllowed > 0) {
+            return (
+          <div key="cigarette" className={`card border-2 ${canSmokeCig ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}>
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
+                  <Cigarette className="w-6 h-6 text-orange-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-800">Cigarette</h3>
+                  <p className="text-sm text-gray-600">
+                    {currentWeekPlan.cigarettesAllowed} allowed this week
+                  </p>
+                </div>
+              </div>
+              {canSmokeCig && (
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-white" />
+                </div>
+              )}
+            </div>
+
+            {/* Today's Activity */}
+            <div className="bg-orange-50 p-3 rounded-lg mb-3">
+              <p className="text-xs font-semibold text-orange-800 mb-1">Today's Activity</p>
+              <p className="text-lg font-bold text-orange-600">{todaysCigs} logged today</p>
+            </div>
+
+            {!canSmokeCig && (
+              <>
+                <div className="bg-orange-100 p-3 rounded-lg mb-3 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-orange-600" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-orange-800">Next available in:</p>
+                    <p className="text-lg font-bold text-orange-600">{formatTime(timeUntilCig)}</p>
+                  </div>
+                </div>
+                {(() => {
+                  const adaptiveMsg = getAdaptiveMessage('cigarette')
+                  if (adaptiveMsg) {
+                    return (
+                      <div className={`p-2 rounded-lg mb-3 text-xs ${
+                        adaptiveMsg.type === 'reward' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-purple-100 text-purple-800'
+                      }`}>
+                        {adaptiveMsg.text}
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
+              </>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleLog('cigarette', false)}
+                disabled={!canSmokeCig}
+                className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
+                  canSmokeCig
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white active:scale-95'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {canSmokeCig ? 'Log Cigarette' : 'Not Available Yet'}
+              </button>
+              {!canSmokeCig && (
+                <button
+                  onClick={() => handleLog('cigarette', true)}
+                  className="px-4 py-3 rounded-lg font-semibold transition-all bg-red-500 hover:bg-red-600 text-white active:scale-95"
+                  title="Log an extraordinary session outside of schedule"
+                >
+                  ⚠️
+                </button>
+              )}
+            </div>
+              </div>
+            )
+          }
+          
+          if (componentId === 'weekSummary') {
+            return (
+        <div key="weekSummary" className="card">
+          <h3 className="font-bold text-gray-800 mb-4">This Week's Plan</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl">
+              <Cigarette className="w-6 h-6 text-orange-600 mb-2" />
+              <p className="text-2xl font-bold text-orange-900">{currentWeekPlan?.cigarettesAllowed || 0}</p>
+              <p className="text-sm text-orange-700">Cigarettes</p>
+            </div>
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl">
+              <Wind className="w-6 h-6 text-blue-600 mb-2" />
+              <p className="text-2xl font-bold text-blue-900">{currentWeekPlan?.vapesAllowed || 0}</p>
+              <p className="text-sm text-blue-700">Vapes</p>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
+            <TrendingDown className="w-4 h-4 text-green-600" />
+            <span>
+              {quitPlan?.reductionFrequency === 'daily' 
+                ? `Reducing daily (${quitPlan?.reductionMethod === 'linear' ? 'steady' : 'faster'})`
+                : 'Reducing gradually each week'
+              }
+            </span>
+          </div>
+        </div>
+            )
+          }
+          
+          if (componentId === 'notifications') {
+            return (
+              <div key="notifications">
         {notificationPermission === 'denied' && (
           <button
             onClick={() => setShowInstructions(true)}
@@ -188,149 +478,31 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
             </div>
           </button>
         )}
-
-        {/* Today's Progress */}
-        <div className="card">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-primary-600" />
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-800">Today's Activity</h3>
-              <p className="text-sm text-gray-600">Logged {todaysLogsCount} times today</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Cigarette Card */}
-        {currentWeekPlan && currentWeekPlan.cigarettesAllowed > 0 && (
-          <div className={`card border-2 ${canSmokeCig ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <Cigarette className="w-6 h-6 text-orange-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-800">Cigarette</h3>
-                  <p className="text-sm text-gray-600">
-                    {currentWeekPlan.cigarettesAllowed} allowed this week
-                  </p>
-                </div>
               </div>
-              {canSmokeCig && (
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-white" />
-                </div>
-              )}
-            </div>
-
-            {!canSmokeCig && (
-              <div className="bg-orange-50 p-3 rounded-lg mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-orange-600" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-orange-800">Next available in:</p>
-                  <p className="text-lg font-bold text-orange-600">{formatTime(timeUntilCig)}</p>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => handleLog('cigarette')}
-              disabled={!canSmokeCig}
-              className={`w-full py-3 rounded-lg font-semibold transition-all ${
-                canSmokeCig
-                  ? 'bg-orange-500 hover:bg-orange-600 text-white active:scale-95'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {canSmokeCig ? 'Log Cigarette' : 'Not Available Yet'}
-            </button>
-          </div>
-        )}
-
-        {/* Vape Card */}
-        {currentWeekPlan && currentWeekPlan.vapesAllowed > 0 && (
-          <div className={`card border-2 ${canSmokeVape ? 'border-green-400 bg-green-50' : 'border-gray-200'}`}>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Wind className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-800">Vape Session</h3>
-                  <p className="text-sm text-gray-600">
-                    {currentWeekPlan.vapesAllowed} allowed this week
-                  </p>
-                </div>
-              </div>
-              {canSmokeVape && (
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-white" />
-                </div>
-              )}
-            </div>
-
-            {!canSmokeVape && (
-              <div className="bg-blue-50 p-3 rounded-lg mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-blue-600" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-blue-800">Next available in:</p>
-                  <p className="text-lg font-bold text-blue-600">{formatTime(timeUntilVape)}</p>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => handleLog('vape')}
-              disabled={!canSmokeVape}
-              className={`w-full py-3 rounded-lg font-semibold transition-all ${
-                canSmokeVape
-                  ? 'bg-blue-500 hover:bg-blue-600 text-white active:scale-95'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {canSmokeVape ? 'Log Vape Session' : 'Not Available Yet'}
-            </button>
-          </div>
-        )}
-
-        {/* Week Summary */}
-        <div className="card">
-          <h3 className="font-bold text-gray-800 mb-4">This Week's Plan</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl">
-              <Cigarette className="w-6 h-6 text-orange-600 mb-2" />
-              <p className="text-2xl font-bold text-orange-900">{currentWeekPlan?.cigarettesAllowed || 0}</p>
-              <p className="text-sm text-orange-700">Cigarettes</p>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl">
-              <Wind className="w-6 h-6 text-blue-600 mb-2" />
-              <p className="text-2xl font-bold text-blue-900">{currentWeekPlan?.vapesAllowed || 0}</p>
-              <p className="text-sm text-blue-700">Vapes</p>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
-            <TrendingDown className="w-4 h-4 text-green-600" />
-            <span>Reducing gradually each week</span>
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        <button
-          onClick={() => onNavigate('stats')}
-          className="card hover:shadow-2xl transition-all active:scale-95"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-gray-800">View Detailed Stats</h3>
-              <p className="text-sm text-gray-600">Charts, achievements & more</p>
-            </div>
-            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-primary-600" />
-            </div>
-          </div>
-        </button>
+            )
+          }
+          
+          return null
+        })}
       </div>
+
+      {/* Debug Modal */}
+      {showDebug && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full my-8">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Notification Debug</h2>
+              <button
+                onClick={() => setShowDebug(false)}
+                className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+            <NotificationDebug />
+          </div>
+        </div>
+      )}
 
       {/* Instructions Modal */}
       {showInstructions && (
@@ -412,23 +584,130 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
         </div>
       )}
 
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full my-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800">Customize Dashboard</h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600 mb-4">Reorder and toggle components</p>
+              
+              {componentOrder.map((componentId, index) => {
+                const labels = {
+                  vape: 'Vape Session',
+                  cigarette: 'Cigarette',
+                  weekSummary: "This Week's Plan",
+                  notifications: 'Notifications'
+                }
+                
+                return (
+                  <div key={componentId} className="bg-gray-50 p-3 rounded-lg flex items-center gap-3">
+                    <GripVertical className="w-5 h-5 text-gray-400" />
+                    
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800">{labels[componentId]}</p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const newVisibility = { ...componentVisibility, [componentId]: !componentVisibility[componentId] }
+                          setComponentVisibility(newVisibility)
+                          storage.saveDashboardVisibility(newVisibility)
+                        }}
+                        className="p-2 hover:bg-gray-200 rounded-lg transition-all"
+                        title={componentVisibility[componentId] ? 'Hide' : 'Show'}
+                      >
+                        {componentVisibility[componentId] ? (
+                          <Eye className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <EyeOff className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          if (index === 0) return
+                          const newOrder = [...componentOrder]
+                          ;[newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
+                          setComponentOrder(newOrder)
+                          storage.saveDashboardOrder(newOrder)
+                        }}
+                        disabled={index === 0}
+                        className={`p-2 rounded-lg transition-all ${
+                          index === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-200'
+                        }`}
+                      >
+                        <ChevronUp className="w-5 h-5 text-gray-600" />
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          if (index === componentOrder.length - 1) return
+                          const newOrder = [...componentOrder]
+                          ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
+                          setComponentOrder(newOrder)
+                          storage.saveDashboardOrder(newOrder)
+                        }}
+                        disabled={index === componentOrder.length - 1}
+                        className={`p-2 rounded-lg transition-all ${
+                          index === componentOrder.length - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-200'
+                        }`}
+                      >
+                        <ChevronDown className="w-5 h-5 text-gray-600" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={() => {
+                const defaultOrder = ['vape', 'cigarette', 'weekSummary', 'notifications']
+                const defaultVisibility = { vape: true, cigarette: true, weekSummary: true, notifications: true }
+                setComponentOrder(defaultOrder)
+                setComponentVisibility(defaultVisibility)
+                storage.saveDashboardOrder(defaultOrder)
+                storage.saveDashboardVisibility(defaultVisibility)
+              }}
+              className="btn-secondary w-full mt-6"
+            >
+              Reset to Default
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal */}
       {selectedType && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
             <div className="text-center mb-6">
-              <div className={`w-16 h-16 mx-auto ${selectedType === 'cigarette' ? 'bg-orange-100' : 'bg-blue-100'} rounded-full flex items-center justify-center mb-4`}>
-                {selectedType === 'cigarette' ? (
+              <div className={`w-16 h-16 mx-auto ${selectedType.type === 'cigarette' ? 'bg-orange-100' : 'bg-blue-100'} rounded-full flex items-center justify-center mb-4`}>
+                {selectedType.type === 'cigarette' ? (
                   <Cigarette className="w-8 h-8 text-orange-600" />
                 ) : (
                   <Wind className="w-8 h-8 text-blue-600" />
                 )}
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">
-                Confirm {selectedType === 'cigarette' ? 'Cigarette' : 'Vape Session'}
+                {selectedType.isExtraordinary ? '⚠️ Extraordinary Session' : `Confirm ${selectedType.type === 'cigarette' ? 'Cigarette' : 'Vape Session'}`}
               </h3>
               <p className="text-gray-600">
-                Are you sure you want to log this {selectedType === 'cigarette' ? 'cigarette' : 'vape session'}?
+                {selectedType.isExtraordinary 
+                  ? `You're logging this ${selectedType.type === 'cigarette' ? 'cigarette' : 'vape session'} outside your schedule. This will be tracked but won't affect your timer.`
+                  : `Are you sure you want to log this ${selectedType.type === 'cigarette' ? 'cigarette' : 'vape session'}?`
+                }
               </p>
             </div>
             <div className="flex gap-3">
@@ -441,13 +720,72 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
               <button
                 onClick={confirmLog}
                 className={`flex-1 py-3 px-6 rounded-lg font-semibold text-white transition-all ${
-                  selectedType === 'cigarette' 
-                    ? 'bg-orange-500 hover:bg-orange-600' 
-                    : 'bg-blue-500 hover:bg-blue-600'
+                  selectedType.type === 'cigarette' 
+                    ? selectedType.isExtraordinary ? 'bg-red-500 hover:bg-red-600' : 'bg-orange-500 hover:bg-orange-600'
+                    : selectedType.isExtraordinary ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
                 }`}
               >
                 Confirm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Smoke-Free Confirmation Modal */}
+      {showSmokeFreeConfirmation && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-3xl p-8 max-w-md w-full shadow-2xl border-4 border-green-400">
+            <div className="text-center">
+              <div className="text-8xl mb-6 animate-bounce">🎊</div>
+              <h2 className="text-4xl font-bold text-gray-800 mb-4">
+                Incredible Achievement!
+              </h2>
+              <p className="text-lg text-gray-700 mb-6 leading-relaxed">
+                You've officially completed your quit smoking journey. This is a huge milestone that will improve your health, save you money, and give you freedom.
+              </p>
+              
+              <div className="bg-white rounded-2xl p-6 mb-6 shadow-lg">
+                <h3 className="font-bold text-gray-800 mb-4 text-xl">Your Journey Stats</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">📅 Weeks to quit:</span>
+                    <span className="font-bold text-green-600">{quitPlan?.totalWeeks - 1 || 0}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">🚬 Started with:</span>
+                    <span className="font-bold text-gray-800">
+                      {quitPlan?.originalCigarettesPerWeek || 0} cigs + {quitPlan?.originalVapesPerWeek || 0} vapes/week
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">📝 Total logs:</span>
+                    <span className="font-bold text-blue-600">{logs.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-6 italic">
+                "The greatest glory in living lies not in never falling, but in rising every time we fall." - Nelson Mandela
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    setShowSmokeFreeConfirmation(false)
+                    onNavigate('achievements')
+                  }}
+                  className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all active:scale-95 shadow-lg"
+                >
+                  🏆 View My Achievements
+                </button>
+                <button
+                  onClick={() => setShowSmokeFreeConfirmation(false)}
+                  className="w-full py-3 bg-white text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all border-2 border-gray-200"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -4,13 +4,15 @@ A Progressive Web App (PWA) that helps users gradually quit smoking and vaping t
 
 ## Features ✨
 
-- **Personalized Quitting Plans**: Choose from slow, medium, or quick reduction paces
+- **Personalized Quitting Plans**: Choose from slow, medium, or quick reduction paces with weekly or daily reduction options
 - **Smart Notifications**: Get notified when you're allowed to smoke/vape
 - **Dual Tracking**: Track both cigarettes and vapes separately
-- **Achievement System**: Unlock achievements as you progress
-- **Comprehensive Stats**: View detailed charts and progress metrics
+- **Extraordinary Session Logging**: Log sessions even when timer is active for tracking slip-ups
+- **Craving Help**: Access motivational quotes and reflection questions when experiencing cravings
+- **Achievement System**: Unlock meaningful achievements based on real progress milestones
+- **Comprehensive Stats**: View detailed charts, money saved (based on your actual prices), and progress metrics
 - **Offline Support**: Works even without internet connection
-- **Mobile-First Design**: Beautiful, modern UI optimized for mobile devices
+- **Mobile-First Design**: Beautiful, modern UI optimized for mobile devices with intuitive organization
 - **Persistent Data**: All data saved locally, survives page reloads
 
 ## Getting Started 🚀
@@ -87,10 +89,26 @@ A Progressive Web App (PWA) that helps users gradually quit smoking and vaping t
 
 ### Daily Use
 
-1. **Dashboard**: See when you can next smoke/vape
-2. **Log**: Tap the button when you smoke/vape (only available when allowed)
-3. **Stats**: View your progress, charts, and savings
-4. **Achievements**: Track unlocked achievements and milestones
+1. **Dashboard**: 
+   - See when you can next smoke/vape with countdown timers
+   - View today's activity integrated into each session card
+   - Log sessions when allowed, or use the ⚠️ button for extraordinary sessions
+   - Access notification settings at the bottom
+
+2. **Stats**: 
+   - View your reduction percentage and money saved
+   - Check detailed charts for daily and weekly progress
+   - Track your active days and streak
+
+3. **Achievements**: 
+   - Unlock meaningful achievements based on real progress
+   - See which achievements you've completed and when
+
+4. **Craving Help**: 
+   - Get instant access to motivational quotes
+   - Read quick tips to beat cravings
+   - Answer reflection questions about your journey
+   - Your responses are saved for future reference
 
 ### Notifications
 
@@ -103,21 +121,29 @@ The app will notify you when:
 
 ### Reduction Algorithm
 
-The app gradually reduces your consumption based on your chosen pace:
-- **Slow**: 5% reduction per week
-- **Medium**: 10% reduction per week
-- **Quick**: 15% reduction per week
+The app gradually reduces your consumption based on your chosen pace and frequency:
+
+**Reduction Paces:**
+- **Slow**: 5% reduction
+- **Medium**: 10% reduction
+- **Quick**: 15% reduction
+
+**Reduction Frequencies:**
+- **Weekly**: Reduction applied once per week
+- **Daily**: Reduction applied each day (7 times per week for faster results)
 
 The algorithm calculates wait times between smokes to distribute them evenly throughout your waking hours.
 
 ### Achievement System
 
 Earn achievements by:
-- Completing days and weeks
-- Reducing consumption percentages
-- Saving money
-- Maintaining streaks
-- Following your plan
+- Completing days and weeks (with realistic time requirements)
+- Reducing consumption percentages (must meet minimum week requirements)
+- Saving money (calculated using your actual cigarette/vape prices)
+- Maintaining activity streaks
+- Logging your first session
+
+Achievements are designed to unlock progressively as you make real progress, not all at once.
 
 ### Data Persistence
 
@@ -154,17 +180,20 @@ qswf/
 │   └── icon-512.png       # App icon (512x512)
 ├── src/
 │   ├── components/
-│   │   ├── Onboarding.jsx    # Initial setup flow
-│   │   ├── Dashboard.jsx     # Main app screen
-│   │   ├── Stats.jsx         # Statistics and charts
-│   │   └── Achievements.jsx  # Achievement tracking
+│   │   ├── Onboarding.jsx       # Initial setup flow with price and frequency options
+│   │   ├── Dashboard.jsx        # Main app screen with improved layout
+│   │   ├── Stats.jsx            # Statistics and charts with accurate calculations
+│   │   ├── Achievements.jsx     # Achievement tracking with meaningful milestones
+│   │   ├── CravingHelp.jsx      # Craving support with quotes and questions
+│   │   └── NotificationDebug.jsx # Notification debugging tools
 │   ├── utils/
-│   │   ├── storage.js        # LocalStorage utilities
-│   │   ├── quittingLogic.js  # Reduction algorithm
-│   │   ├── notifications.js  # Notification system
-│   │   ├── achievements.js   # Achievement logic
-│   │   └── quotes.js         # Motivational quotes
-│   ├── App.jsx            # Main app component
+│   │   ├── storage.js           # LocalStorage utilities with craving responses
+│   │   ├── quittingLogic.js     # Reduction algorithm with daily/weekly support
+│   │   ├── notifications.js     # Notification system
+│   │   ├── achievements.js      # Achievement logic with price-based calculations
+│   │   ├── quotes.js            # Daily quote selector
+│   │   └── quotes.json          # 100+ motivational quotes and reflection questions
+│   ├── App.jsx            # Main app component with 4-tab navigation
 │   ├── main.jsx           # Entry point
 │   └── index.css          # Global styles
 ├── build-apk.ps1          # Build and APK creation script
