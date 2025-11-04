@@ -8,6 +8,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
+      devOptions: {
+        enabled: true,
+        type: 'module'
+      },
       manifest: {
         name: 'Quit Smoking & Vaping',
         short_name: 'QuitSmoking',
