@@ -7,7 +7,8 @@ const STORAGE_KEYS = {
   ONBOARDING: 'qswf_onboarding_complete',
   CRAVING_RESPONSES: 'qswf_craving_responses',
   DASHBOARD_ORDER: 'qswf_dashboard_order',
-  DASHBOARD_VISIBILITY: 'qswf_dashboard_visibility'
+  DASHBOARD_VISIBILITY: 'qswf_dashboard_visibility',
+  NOTIFICATION_TESTED: 'qswf_notification_tested'
 }
 
 export const storage = {
@@ -88,7 +89,16 @@ export const storage = {
     const visibility = localStorage.getItem(STORAGE_KEYS.DASHBOARD_VISIBILITY)
     return visibility ? JSON.parse(visibility) : null
   },
-  
+
+  setNotificationTested: (tested) => {
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATION_TESTED, JSON.stringify(tested))
+  },
+
+  hasNotificationBeenTested: () => {
+    const tested = localStorage.getItem(STORAGE_KEYS.NOTIFICATION_TESTED)
+    return tested ? JSON.parse(tested) : false
+  },
+
   clearAll: () => {
     Object.values(STORAGE_KEYS).forEach(key => {
       localStorage.removeItem(key)

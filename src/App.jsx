@@ -185,6 +185,8 @@ function App() {
         <Achievements
           unlockedAchievements={achievements}
           userData={userData}
+          quitPlan={quitPlan}
+          logs={logs}
           onBack={handleBack}
         />
       )}

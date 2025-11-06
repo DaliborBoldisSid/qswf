@@ -17,7 +17,12 @@
       "mcp__playwright__browser_wait_for",
       "mcp__playwright__browser_evaluate",
       "mcp__playwright__browser_console_messages",
-      "mcp__playwright__browser_close"
+      "mcp__playwright__browser_close",
+      "Bash(npm test)",
+      "Bash(node tests/test-reduction-fix.js:*)",
+      "Bash(node tests/test-days-active-fix.js:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

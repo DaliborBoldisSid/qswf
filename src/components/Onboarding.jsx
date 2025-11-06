@@ -15,9 +15,46 @@ const Onboarding = ({ onComplete }) => {
     cigarettePrice: '8.00',
     vapePrice: '15.00'
   })
+  const [validationErrors, setValidationErrors] = useState({
+    cigarettesPerWeek: '',
+    vapesPerWeek: '',
+    cigarettePrice: '',
+    vapePrice: ''
+  })
+
+  const validateNumericInput = (field, value) => {
+    const numValue = parseFloat(value)
+
+    if (value === '') {
+      return '' // Empty is valid (user may not use this field)
+    }
+
+    if (isNaN(numValue) || numValue < 0) {
+      return '❌ Please enter a positive number'
+    }
+
+    // Check for extremely high values
+    if (field === 'cigarettesPerWeek' && numValue > 500) {
+      return '⚠️ This seems unusually high (500+ per week). Please verify.'
+    }
+    if (field === 'vapesPerWeek' && numValue > 1000) {
+      return '⚠️ This seems unusually high (1000+ per week). Please verify.'
+    }
+    if ((field === 'cigarettePrice' || field === 'vapePrice') && numValue > 100) {
+      return '⚠️ This seems unusually high. Please verify.'
+    }
+
+    return '' // Valid
+  }
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+
+    // Validate numeric fields in real-time
+    if (['cigarettesPerWeek', 'vapesPerWeek', 'cigarettePrice', 'vapePrice'].includes(field)) {
+      const error = validateNumericInput(field, value)
+      setValidationErrors(prev => ({ ...prev, [field]: error }))
+    }
   }
 
   const handleNext = () => {
@@ -99,6 +136,16 @@ const Onboarding = ({ onComplete }) => {
                 ✨ This app will help you reduce consumption gradually, send you notifications when you're allowed to smoke, and track your progress with achievements!
               </p>
             </div>
+
+            <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">📱</span>
+                <p className="text-sm font-semibold text-green-800">Works Offline</p>
+              </div>
+              <p className="text-xs text-green-700">
+                All your data is stored locally on your device. No internet connection needed after installation!
+              </p>
+            </div>
           </div>
         )
 
@@ -113,7 +160,9 @@ const Onboarding = ({ onComplete }) => {
             </p>
 
             <div className="space-y-4">
-              <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
+              <div className={`bg-white p-4 rounded-xl border-2 ${
+                validationErrors.cigarettesPerWeek ? 'border-red-300' : 'border-gray-200'
+              }`}>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
                     <Cigarette className="w-5 h-5 text-orange-600" />
@@ -125,12 +174,21 @@ const Onboarding = ({ onComplete }) => {
                   min="0"
                   value={formData.cigarettesPerWeek}
                   onChange={(e) => handleInputChange('cigarettesPerWeek', e.target.value)}
-                  className="input-field"
+                  className={`input-field ${
+                    validationErrors.cigarettesPerWeek ? 'border-red-300' : ''
+                  }`}
                   placeholder="e.g., 70 (about 10 per day)"
                 />
+                {validationErrors.cigarettesPerWeek && (
+                  <p className="text-sm text-red-600 mt-2">
+                    {validationErrors.cigarettesPerWeek}
+                  </p>
+                )}
               </div>
 
-              <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
+              <div className={`bg-white p-4 rounded-xl border-2 ${
+                validationErrors.vapesPerWeek ? 'border-red-300' : 'border-gray-200'
+              }`}>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                     <Wind className="w-5 h-5 text-blue-600" />
@@ -142,9 +200,16 @@ const Onboarding = ({ onComplete }) => {
                   min="0"
                   value={formData.vapesPerWeek}
                   onChange={(e) => handleInputChange('vapesPerWeek', e.target.value)}
-                  className="input-field"
+                  className={`input-field ${
+                    validationErrors.vapesPerWeek ? 'border-red-300' : ''
+                  }`}
                   placeholder="e.g., 140 (about 20 per day)"
                 />
+                {validationErrors.vapesPerWeek && (
+                  <p className="text-sm text-red-600 mt-2">
+                    {validationErrors.vapesPerWeek}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -383,9 +448,16 @@ const Onboarding = ({ onComplete }) => {
                   min="0"
                   value={formData.cigarettePrice}
                   onChange={(e) => handleInputChange('cigarettePrice', e.target.value)}
-                  className="input-field text-lg"
+                  className={`input-field text-lg ${
+                    validationErrors.cigarettePrice ? 'border-red-300' : ''
+                  }`}
                   placeholder="8.00"
                 />
+                {validationErrors.cigarettePrice && (
+                  <p className="text-sm text-red-600">
+                    {validationErrors.cigarettePrice}
+                  </p>
+                )}
                 <p className="text-xs text-gray-600">
                   Price per pack of 20 cigarettes
                 </p>
@@ -404,9 +476,16 @@ const Onboarding = ({ onComplete }) => {
                   min="0"
                   value={formData.vapePrice}
                   onChange={(e) => handleInputChange('vapePrice', e.target.value)}
-                  className="input-field text-lg"
+                  className={`input-field text-lg ${
+                    validationErrors.vapePrice ? 'border-red-300' : ''
+                  }`}
                   placeholder="15.00"
                 />
+                {validationErrors.vapePrice && (
+                  <p className="text-sm text-red-600">
+                    {validationErrors.vapePrice}
+                  </p>
+                )}
                 <p className="text-xs text-gray-600">
                   Price per vape device or pod refill
                 </p>
@@ -422,6 +501,37 @@ const Onboarding = ({ onComplete }) => {
         )
 
       case 4:
+        // Calculate estimated quit date based on reduction rate
+        const calculateEstimatedQuitDate = () => {
+          const totalConsumption = (parseInt(formData.cigarettesPerWeek) || 0) + (parseInt(formData.vapesPerWeek) || 0)
+          const rates = { slow: 0.05, medium: 0.10, quick: 0.15 }
+          const reductionRate = rates[formData.planSpeed]
+          const periodsPerWeek = formData.reductionFrequency === 'daily' ? 7 : 1
+
+          let weeksToQuit = 0
+          let remaining = totalConsumption
+
+          // Simulate reduction until we reach 0
+          while (remaining > 1 && weeksToQuit < 100) {
+            const periodsThisWeek = periodsPerWeek
+            for (let i = 0; i < periodsThisWeek && remaining > 1; i++) {
+              if (formData.reductionMethod === 'compound') {
+                remaining = remaining * (1 - reductionRate)
+              } else {
+                remaining = remaining - (totalConsumption * reductionRate)
+              }
+              remaining = Math.max(0, remaining)
+            }
+            weeksToQuit++
+          }
+
+          const quitDate = new Date()
+          quitDate.setDate(quitDate.getDate() + (weeksToQuit * 7))
+          return { weeksToQuit, quitDate }
+        }
+
+        const { weeksToQuit, quitDate } = calculateEstimatedQuitDate()
+
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -434,6 +544,22 @@ const Onboarding = ({ onComplete }) => {
               <p className="text-gray-600 mt-2">
                 Your personalized quitting plan is ready
               </p>
+            </div>
+
+            {/* Motivational Estimated Quit Date */}
+            <div className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 p-6 rounded-xl border-2 border-green-300">
+              <div className="text-center">
+                <p className="text-sm font-semibold text-green-700 mb-2">🎯 Estimated Quit Date</p>
+                <p className="text-3xl font-bold text-green-800 mb-2">
+                  {quitDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                </p>
+                <p className="text-sm text-green-700">
+                  About {weeksToQuit} week{weeksToQuit !== 1 ? 's' : ''} from now
+                </p>
+                <p className="text-xs text-green-600 mt-3 italic">
+                  "Every journey begins with a single step. You've got this!"
+                </p>
+              </div>
             </div>
 
             <div className="bg-gradient-to-r from-primary-50 to-blue-50 p-6 rounded-xl space-y-4">
@@ -495,39 +621,59 @@ const Onboarding = ({ onComplete }) => {
       <div className="w-full max-w-md">
         <div className="card">
           {/* Progress indicator */}
-          <div className="flex gap-2 mb-8">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className={`h-2 flex-1 rounded-full transition-all ${
-                  i <= step ? 'bg-primary-500' : 'bg-gray-200'
-                }`}
-              />
-            ))}
+          <div className="mb-8">
+            <div className="flex justify-center mb-2">
+              <span className="text-sm font-semibold text-gray-600">
+                Step {step + 1} of 5
+              </span>
+            </div>
+            <div className="flex gap-2">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className={`h-2 flex-1 rounded-full transition-all ${
+                    i <= step ? 'bg-primary-500' : 'bg-gray-200'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Step content */}
           {renderStep()}
 
           {/* Navigation buttons */}
-          <div className="flex gap-3 mt-8">
-            {step > 0 && (
-              <button
-                onClick={() => setStep(step - 1)}
-                className="btn-secondary flex-1"
-              >
-                Back
-              </button>
+          <div className="mt-8">
+            {/* Helper text for disabled Continue button */}
+            {!canProceed() && (
+              <div className="mb-3 text-center">
+                <p className="text-sm text-gray-600">
+                  {step === 0 && '✏️ Enter your name to continue'}
+                  {step === 1 && '📊 Enter at least one consumption value to continue'}
+                  {step === 3 && '💰 Enter valid prices for your selected items'}
+                </p>
+              </div>
             )}
-            <button
-              onClick={handleNext}
-              disabled={!canProceed()}
-              className={`btn-primary flex-1 ${
-                !canProceed() ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {step === 3 ? 'Start My Journey' : 'Continue'}
-            </button>
+
+            <div className="flex gap-3">
+              {step > 0 && (
+                <button
+                  onClick={() => setStep(step - 1)}
+                  className="btn-secondary flex-1"
+                >
+                  Back
+                </button>
+              )}
+              <button
+                onClick={handleNext}
+                disabled={!canProceed()}
+                className={`btn-primary flex-1 ${
+                  !canProceed() ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {step === 3 ? 'Start My Journey' : 'Continue'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

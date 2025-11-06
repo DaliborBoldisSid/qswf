@@ -14,6 +14,10 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
   const [showDebug, setShowDebug] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showSmokeFreeConfirmation, setShowSmokeFreeConfirmation] = useState(false)
+  const [showWeekPlanModal, setShowWeekPlanModal] = useState(false)
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false)
+  const [showToast, setShowToast] = useState(false)
+  const [toastMessage, setToastMessage] = useState('')
   const [componentOrder, setComponentOrder] = useState(() => {
     return storage.getDashboardOrder() || ['vape', 'cigarette', 'weekSummary', 'notifications']
   })
@@ -33,6 +37,15 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
     return () => clearInterval(timer)
   }, [])
 
+  // Toast notification handler
+  const showToastNotification = (message) => {
+    setToastMessage(message)
+    setShowToast(true)
+    setTimeout(() => {
+      setShowToast(false)
+    }, 3000)
+  }
+
   const currentWeekPlan = getCurrentWeekPlan(quitPlan)
   
   const lastCigLog = [...logs].filter(l => l.type === 'cigarette').sort((a, b) => b.timestamp - a.timestamp)[0]
@@ -50,11 +63,14 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
     const hours = Math.floor(totalSeconds / 3600)
     const minutes = Math.floor((totalSeconds % 3600) / 60)
     const seconds = totalSeconds % 60
-    
+
+    // Show only minutes when > 1 minute to reduce visual noise
     if (hours > 0) {
-      return `${hours}h${minutes}m${seconds}s`
-    } else if (minutes > 0) {
-      return `${minutes}m${seconds}s`
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+    } else if (minutes > 1) {
+      return `${minutes}m`
+    } else if (minutes === 1) {
+      return `${minutes}m ${seconds}s`
     }
     return `${seconds}s`
   }
@@ -105,30 +121,33 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
 
   const handleTestNotification = async () => {
     console.log('Button tapped, current permission:', getNotificationPermission())
-    
+
     // Check current permission state
     const currentPerm = getNotificationPermission()
-    
+
     if (currentPerm === 'denied') {
       setShowInstructions(true)
       return
     }
-    
+
     if (currentPerm === 'default') {
       // Need to request permission
+      setIsRequestingPermission(true)
       try {
         console.log('Requesting notification permission...')
         const result = await requestNotificationPermission()
         console.log('Permission result:', result)
-        
+
         setNotificationPermission(getNotificationPermission())
-        
+
         if (result.success) {
           showNotification('🎉 Notifications Enabled!', {
             body: 'You will now receive alerts when you can smoke/vape.',
             tag: 'test-notification',
             vibrate: [200, 100, 200]
           })
+          // Mark notification as tested
+          storage.setNotificationTested(true)
         } else if (result.reason === 'blocked') {
           setShowInstructions(true)
         } else if (result.reason === 'denied') {
@@ -137,6 +156,8 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
       } catch (error) {
         console.error('Error requesting permission:', error)
         alert('Error requesting permission. Please try again.')
+      } finally {
+        setIsRequestingPermission(false)
       }
     } else if (currentPerm === 'granted') {
       // Already granted, just test
@@ -146,6 +167,8 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
         vibrate: [200, 100, 200],
         requireInteraction: false
       })
+      // Mark notification as tested
+      storage.setNotificationTested(true)
     }
   }
 
@@ -250,9 +273,9 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                     </div>
                   </div>
                   {canSmokeVape && (
-                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                      <CheckCircle className="w-5 h-5 text-white" />
-                    </div>
+                    <span className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full">
+                      READY
+                    </span>
                   )}
                 </div>
 
@@ -302,13 +325,16 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                     {canSmokeVape ? 'Log Vape Session' : 'Not Available Yet'}
                   </button>
                   {!canSmokeVape && (
-                    <button
-                      onClick={() => handleLog('vape', true)}
-                      className="px-4 py-3 rounded-lg font-semibold transition-all bg-red-500 hover:bg-red-600 text-white active:scale-95"
-                      title="Log an extraordinary session outside of schedule"
-                    >
-                      ⚠️
-                    </button>
+                    <div className="flex flex-col items-center gap-1">
+                      <button
+                        onClick={() => handleLog('vape', true)}
+                        className="px-4 py-3 rounded-lg font-semibold transition-all bg-red-500 hover:bg-red-600 text-white active:scale-95"
+                        title="Log an extraordinary session outside of schedule"
+                      >
+                        ⚠️
+                      </button>
+                      <span className="text-xs font-semibold text-red-600">Emergency</span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -331,9 +357,9 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                 </div>
               </div>
               {canSmokeCig && (
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-white" />
-                </div>
+                <span className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full">
+                  READY
+                </span>
               )}
             </div>
 
@@ -383,13 +409,16 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                 {canSmokeCig ? 'Log Cigarette' : 'Not Available Yet'}
               </button>
               {!canSmokeCig && (
-                <button
-                  onClick={() => handleLog('cigarette', true)}
-                  className="px-4 py-3 rounded-lg font-semibold transition-all bg-red-500 hover:bg-red-600 text-white active:scale-95"
-                  title="Log an extraordinary session outside of schedule"
-                >
-                  ⚠️
-                </button>
+                <div className="flex flex-col items-center gap-1">
+                  <button
+                    onClick={() => handleLog('cigarette', true)}
+                    className="px-4 py-3 rounded-lg font-semibold transition-all bg-red-500 hover:bg-red-600 text-white active:scale-95"
+                    title="Log an extraordinary session outside of schedule"
+                  >
+                    ⚠️
+                  </button>
+                  <span className="text-xs font-semibold text-red-600">Emergency</span>
+                </div>
               )}
             </div>
               </div>
@@ -398,8 +427,15 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
           
           if (componentId === 'weekSummary') {
             return (
-        <div key="weekSummary" className="card">
-          <h3 className="font-bold text-gray-800 mb-4">This Week's Plan</h3>
+        <button
+          key="weekSummary"
+          onClick={() => setShowWeekPlanModal(true)}
+          className="card hover:shadow-xl transition-all active:scale-95 text-left"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-800">This Week's Plan</h3>
+            <span className="text-xs font-semibold text-primary-600">Tap for details →</span>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-xl">
               <Cigarette className="w-6 h-6 text-orange-600 mb-2" />
@@ -415,13 +451,13 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
           <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
             <TrendingDown className="w-4 h-4 text-green-600" />
             <span>
-              {quitPlan?.reductionFrequency === 'daily' 
+              {quitPlan?.reductionFrequency === 'daily'
                 ? `Reducing daily (${quitPlan?.reductionMethod === 'linear' ? 'steady' : 'faster'})`
                 : 'Reducing gradually each week'
               }
             </span>
           </div>
-        </div>
+        </button>
             )
           }
           
@@ -448,21 +484,30 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
         {notificationPermission === 'default' && (
           <button
             onClick={handleTestNotification}
-            className="card bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 hover:shadow-2xl transition-all active:scale-95 animate-pulse"
+            disabled={isRequestingPermission}
+            className="card bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-400 hover:shadow-2xl transition-all active:scale-95 animate-pulse disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center">
-                <Bell className="w-6 h-6 text-white animate-bounce" />
+                {isRequestingPermission ? (
+                  <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Bell className="w-6 h-6 text-white animate-bounce" />
+                )}
               </div>
               <div className="flex-1 text-left">
-                <h3 className="font-bold text-gray-800 text-lg">🔔 TAP HERE to Enable Notifications</h3>
-                <p className="text-sm text-gray-600 font-semibold">Required for smoke/vape reminders</p>
+                <h3 className="font-bold text-gray-800 text-lg">
+                  {isRequestingPermission ? 'Requesting Permission...' : '🔔 TAP HERE to Enable Notifications'}
+                </h3>
+                <p className="text-sm text-gray-600 font-semibold">
+                  {isRequestingPermission ? 'Please check your browser prompt' : 'Required for smoke/vape reminders'}
+                </p>
               </div>
             </div>
           </button>
         )}
 
-        {notificationPermission === 'granted' && (
+        {notificationPermission === 'granted' && !storage.hasNotificationBeenTested() && (
           <button
             onClick={handleTestNotification}
             className="card bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 hover:shadow-2xl transition-all active:scale-95"
@@ -623,6 +668,7 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                           const newVisibility = { ...componentVisibility, [componentId]: !componentVisibility[componentId] }
                           setComponentVisibility(newVisibility)
                           storage.saveDashboardVisibility(newVisibility)
+                          showToastNotification('✅ Visibility updated!')
                         }}
                         className="p-2 hover:bg-gray-200 rounded-lg transition-all"
                         title={componentVisibility[componentId] ? 'Hide' : 'Show'}
@@ -633,7 +679,7 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                           <EyeOff className="w-5 h-5 text-gray-400" />
                         )}
                       </button>
-                      
+
                       <button
                         onClick={() => {
                           if (index === 0) return
@@ -641,6 +687,7 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                           ;[newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]]
                           setComponentOrder(newOrder)
                           storage.saveDashboardOrder(newOrder)
+                          showToastNotification('✅ Order updated!')
                         }}
                         disabled={index === 0}
                         className={`p-2 rounded-lg transition-all ${
@@ -649,7 +696,7 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                       >
                         <ChevronUp className="w-5 h-5 text-gray-600" />
                       </button>
-                      
+
                       <button
                         onClick={() => {
                           if (index === componentOrder.length - 1) return
@@ -657,6 +704,7 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                           ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
                           setComponentOrder(newOrder)
                           storage.saveDashboardOrder(newOrder)
+                          showToastNotification('✅ Order updated!')
                         }}
                         disabled={index === componentOrder.length - 1}
                         className={`p-2 rounded-lg transition-all ${
@@ -732,6 +780,94 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
         </div>
       )}
 
+      {/* Week Plan Details Modal */}
+      {showWeekPlanModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full my-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800">Your Quit Plan</h2>
+              <button
+                onClick={() => setShowWeekPlanModal(false)}
+                className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center hover:bg-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Current Week Highlight */}
+              <div className="bg-gradient-to-r from-primary-50 to-blue-50 p-4 rounded-xl border-2 border-primary-300">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-bold text-gray-800">Week {weekNumber + 1} (Current)</h3>
+                  <span className="px-2 py-1 bg-primary-500 text-white text-xs font-bold rounded-full">NOW</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <p className="text-xs text-gray-600">Cigarettes</p>
+                    <p className="text-lg font-bold text-orange-600">{currentWeekPlan?.cigarettesAllowed || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600">Vapes</p>
+                    <p className="text-lg font-bold text-blue-600">{currentWeekPlan?.vapesAllowed || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Next 3 Weeks Preview */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-gray-700 text-sm">Upcoming Weeks</h3>
+                {quitPlan?.weeks?.slice(weekNumber + 1, weekNumber + 4).map((week, index) => (
+                  <div key={week.weekNumber} className="bg-gray-50 p-3 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-gray-700">Week {week.weekNumber + 1}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(week.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2">
+                        <Cigarette className="w-4 h-4 text-orange-500" />
+                        <span className="text-sm font-bold text-gray-800">{week.cigarettesAllowed}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Wind className="w-4 h-4 text-blue-500" />
+                        <span className="text-sm font-bold text-gray-800">{week.vapesAllowed}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Progress Summary */}
+              <div className="bg-green-50 p-4 rounded-lg border-2 border-green-200">
+                <h3 className="font-bold text-green-800 mb-2">Your Progress</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Total weeks:</span>
+                    <span className="font-bold text-gray-800">{quitPlan?.totalWeeks || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Weeks completed:</span>
+                    <span className="font-bold text-green-600">{weekNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Weeks remaining:</span>
+                    <span className="font-bold text-primary-600">{Math.max(0, (quitPlan?.totalWeeks || 0) - weekNumber - 1)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowWeekPlanModal(false)}
+              className="btn-primary w-full mt-6"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Smoke-Free Confirmation Modal */}
       {showSmokeFreeConfirmation && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
@@ -787,6 +923,15 @@ const Dashboard = ({ userData, quitPlan, logs, onLogSmoke, onNavigate }) => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top">
+          <div className="bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2">
+            <span className="font-semibold">{toastMessage}</span>
           </div>
         </div>
       )}

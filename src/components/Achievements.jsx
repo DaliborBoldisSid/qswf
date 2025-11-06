@@ -1,14 +1,68 @@
 import { ArrowLeft, Trophy, Lock } from 'lucide-react'
-import { ACHIEVEMENTS } from '../utils/achievements'
+import { ACHIEVEMENTS, calculateStats } from '../utils/achievements'
 
-const Achievements = ({ unlockedAchievements, userData, onBack }) => {
+const Achievements = ({ unlockedAchievements, userData, quitPlan, logs, onBack }) => {
   const unlockedIds = unlockedAchievements.map(a => a.id)
   const currencySymbol = userData?.currency === 'EUR' ? '€' : '$'
-  
+  const stats = calculateStats(logs, quitPlan, userData)
+
   // Replace $ with user's currency in achievement descriptions
   const formatDescription = (description) => {
     return description.replace(/\$/g, currencySymbol)
   }
+
+  // Calculate progress for locked achievements
+  const getAchievementProgress = (achievement) => {
+    const conditionStr = achievement.condition.toString()
+
+    // Extract target values from condition
+    if (conditionStr.includes('totalLogged >= ')) {
+      const target = parseInt(conditionStr.match(/totalLogged >= (\d+)/)?.[1] || 0)
+      return { current: stats.totalLogged, target, type: 'sessions' }
+    }
+    if (conditionStr.includes('daysActive >= ')) {
+      const target = parseInt(conditionStr.match(/daysActive >= (\d+)/)?.[1] || 0)
+      return { current: stats.daysActive, target, type: 'days' }
+    }
+    if (conditionStr.includes('reductionPercentage >= ')) {
+      const target = parseInt(conditionStr.match(/reductionPercentage >= (\d+)/)?.[1] || 0)
+      return { current: stats.reductionPercentage, target, type: 'reduction' }
+    }
+    if (conditionStr.includes('moneySaved >= ')) {
+      const target = parseInt(conditionStr.match(/moneySaved >= (\d+)/)?.[1] || 0)
+      return { current: stats.moneySaved, target, type: 'money' }
+    }
+    if (conditionStr.includes('currentStreak >= ')) {
+      const target = parseInt(conditionStr.match(/currentStreak >= (\d+)/)?.[1] || 0)
+      return { current: stats.currentStreak, target, type: 'streak' }
+    }
+
+    return null
+  }
+
+  // Sort achievements: unlocked first, then by proximity to unlocking
+  const sortedAchievements = [...ACHIEVEMENTS].sort((a, b) => {
+    const aUnlocked = unlockedIds.includes(a.id)
+    const bUnlocked = unlockedIds.includes(b.id)
+
+    // Unlocked achievements first
+    if (aUnlocked && !bUnlocked) return -1
+    if (!aUnlocked && bUnlocked) return 1
+
+    // For locked achievements, sort by progress (closest to unlocking first)
+    if (!aUnlocked && !bUnlocked) {
+      const aProgress = getAchievementProgress(a)
+      const bProgress = getAchievementProgress(b)
+
+      if (aProgress && bProgress) {
+        const aPercent = (aProgress.current / aProgress.target) * 100
+        const bPercent = (bProgress.current / bProgress.target) * 100
+        return bPercent - aPercent // Higher progress first
+      }
+    }
+
+    return 0
+  })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-500 via-blue-500 to-purple-600 pb-20">
@@ -53,9 +107,10 @@ const Achievements = ({ unlockedAchievements, userData, onBack }) => {
         </div>
 
         {/* Achievements Grid */}
-        {ACHIEVEMENTS.map((achievement) => {
+        {sortedAchievements.map((achievement) => {
           const isUnlocked = unlockedIds.includes(achievement.id)
           const unlockedData = unlockedAchievements.find(a => a.id === achievement.id)
+          const progress = !isUnlocked ? getAchievementProgress(achievement) : null
 
           return (
             <div
@@ -87,6 +142,29 @@ const Achievements = ({ unlockedAchievements, userData, onBack }) => {
                     <p className="text-xs text-yellow-700 mt-2">
                       Unlocked {new Date(unlockedData.unlockedAt).toLocaleDateString()}
                     </p>
+                  )}
+                  {!isUnlocked && progress && (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="text-gray-600">
+                          Progress: {progress.current}/{progress.target}
+                          {progress.type === 'days' && ' days'}
+                          {progress.type === 'sessions' && ' sessions'}
+                          {progress.type === 'reduction' && '%'}
+                          {progress.type === 'streak' && ' days'}
+                          {progress.type === 'money' && ` ${currencySymbol}`}
+                        </span>
+                        <span className="font-semibold text-gray-700">
+                          {Math.min(100, Math.round((progress.current / progress.target) * 100))}%
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-primary-500 to-blue-500 transition-all duration-500"
+                          style={{ width: `${Math.min(100, (progress.current / progress.target) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

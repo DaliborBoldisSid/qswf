@@ -180,11 +180,11 @@ export const calculateStats = (logs, quitPlan, userData) => {
   const currentTotal = currentCigsPerWeek + currentVapesPerWeek
   
   // Calculate reduction percentage compared to ORIGINAL baseline
-  // Only meaningful after at least 1 complete week
+  // Show after at least 1 complete day to provide immediate feedback
   const originalTotal = quitPlan.originalCigarettesPerWeek + quitPlan.originalVapesPerWeek
   let reductionPercentage = 0
-  
-  if (weeksSinceStart >= 1 && originalTotal > 0) {
+
+  if (daysSinceStart >= 1 && originalTotal > 0) {
     // Compare actual average consumption to original baseline
     reductionPercentage = Math.min(100, Math.max(0, ((originalTotal - currentTotal) / originalTotal) * 100))
   }
@@ -240,7 +240,7 @@ export const calculateStats = (logs, quitPlan, userData) => {
   // This would require more complex logic to track daily limits vs actuals
   
   return {
-    daysActive: Math.max(0, daysSinceStart),
+    daysActive: logs.length > 0 ? Math.max(1, daysSinceStart) : 0,
     totalLogged: totalLogged || 0,
     cigarettesLogged: cigarettesLogged || 0,
     vapesLogged: vapesLogged || 0,
