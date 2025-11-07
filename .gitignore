@@ -31,9 +31,10 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
-# APK build files
-twa-manifest.json
+# APK build files (keep twa-manifest.json for reference)
 app/
 *.apk
 *.aab
+*.keystore
 key.properties
+.bubblewrap/
