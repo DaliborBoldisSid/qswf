@@ -66,8 +66,8 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "  1. Check your internet connection" -ForegroundColor White
     Write-Host "  2. Use a VPN if behind a firewall" -ForegroundColor White
     Write-Host "  3. Try the web-based method: https://www.pwabuilder.com/" -ForegroundColor White
-    Stop-Job -Job $serverJob
-    Remove-Job -Job $serverJob
+    Stop-Job -Job $serverJob -ErrorAction SilentlyContinue
+    Remove-Job -Job $serverJob -ErrorAction SilentlyContinue
     exit 1
 }
 Write-Host "✓ APK built successfully!" -ForegroundColor Green
@@ -93,7 +93,6 @@ foreach ($apkFile in $apkFiles) {
 }
 
 if (-not $found) {
-    # Search for APK in project directory
     $foundApk = Get-ChildItem -Path . -Filter "*.apk" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($foundApk) {
         Copy-Item -Path $foundApk.FullName -Destination "build\" -Force
@@ -107,8 +106,8 @@ Write-Host ""
 
 # Cleanup
 Write-Host "Stopping preview server..." -ForegroundColor Yellow
-Stop-Job -Job $serverJob
-Remove-Job -Job $serverJob
+Stop-Job -Job $serverJob -ErrorAction SilentlyContinue
+Remove-Job -Job $serverJob -ErrorAction SilentlyContinue
 Write-Host "✓ Server stopped" -ForegroundColor Green
 Write-Host ""
 
