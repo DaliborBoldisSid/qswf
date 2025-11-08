@@ -15,10 +15,22 @@ The APK will be generated in the `build/` folder.
 ### Windows (PowerShell)
 
 ```powershell
-.\build-apk.ps1
+.\build-apk-windows.ps1
 ```
 
-Then follow the on-screen instructions to complete the build manually.
+The APK will be generated in the `build\` folder.
+
+**Note**: You'll need to answer two prompts:
+1. Install Android SDK? Type `Y` and press Enter
+2. Agree to SDK terms? Type `y` and press Enter
+
+### Windows Subsystem for Linux (WSL)
+
+```bash
+bash build-apk-automated.sh
+```
+
+The APK will be generated in the `build/` folder.
 
 ## Manual Build Process
 
